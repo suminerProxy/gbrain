@@ -21,6 +21,23 @@ import { tmpdir } from 'os';
 import { execSync } from 'child_process';
 import { PGLiteEngine } from '../src/core/pglite-engine.ts';
 
+let originalGbrainHome: string | undefined;
+let isolatedGbrainHome: string | undefined;
+
+beforeEach(() => {
+  originalGbrainHome = process.env.GBRAIN_HOME;
+  isolatedGbrainHome = mkdtempSync(join(tmpdir(), 'gbrain-sync-par-home-'));
+  process.env.GBRAIN_HOME = isolatedGbrainHome;
+});
+
+afterEach(() => {
+  if (originalGbrainHome === undefined) delete process.env.GBRAIN_HOME;
+  else process.env.GBRAIN_HOME = originalGbrainHome;
+  if (isolatedGbrainHome) rmSync(isolatedGbrainHome, { recursive: true, force: true });
+  originalGbrainHome = undefined;
+  isolatedGbrainHome = undefined;
+});
+
 function git(repo: string, ...args: string[]): string {
   return execSync(`git ${args.join(' ')}`, { cwd: repo, encoding: 'utf-8' }).trim();
 }
