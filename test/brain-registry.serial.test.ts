@@ -13,6 +13,7 @@ import {
   type MountEntry,
 } from '../src/core/brain-registry.ts';
 import { GBrainError } from '../src/core/types.ts';
+import { withEnv } from './helpers/with-env.ts';
 
 /** Create a temp dir + write a mounts.json into it. Returns the path. */
 function tempMountsFile(contents: unknown): string {
@@ -266,33 +267,34 @@ describe('BrainRegistry — lazy init', () => {
   });
 
   test('empty/null/undefined id routes to host', async () => {
-    // We can't actually call getBrain('') without a host config, so we just
-    // verify the routing logic by observing the default-branch path. This
-    // test proves the fall-through to HOST_BRAIN_ID happens before any
-    // lookup, not that host init actually succeeds.
+    // We can't actually call getBrain('') with a real host config, so verify
+    // the routing logic by observing the default-branch path. This proves the
+    // fall-through to HOST_BRAIN_ID happens before any lookup, not that host
+    // init actually succeeds.
     //
-    // Hermeticity: dev machines often have a real ~/.gbrain/config.json
-    // (the maintainer's own brain). Without GBRAIN_HOME isolation, the
-    // host-init path RESOLVES successfully on those machines instead of
-    // rejecting, breaking the `rejects.not.toBeInstanceOf` assertion. Pin
-    // GBRAIN_HOME to a guaranteed-empty tempdir so host-init has nothing
-    // to find and fails loudly (which is exactly the error the assertion
-    // wants — not UnknownBrainError, but ALSO not a successful resolve).
+    // Hermeticity: dev machines and CI often expose GBRAIN_DATABASE_URL or
+    // DATABASE_URL. loadConfig() intentionally lets those env vars override
+    // GBRAIN_HOME config files, so this test must clear them as well as point
+    // GBRAIN_HOME at an empty tempdir. Otherwise the host-init path resolves
+    // successfully against a real configured database.
     const isolatedHome = mkdtempSync(join(tmpdir(), 'brain-registry-home-'));
     track(isolatedHome);
-    const savedHome = process.env.GBRAIN_HOME;
-    process.env.GBRAIN_HOME = isolatedHome;
-    try {
+    await withEnv({
+      GBRAIN_HOME: isolatedHome,
+      GBRAIN_DATABASE_URL: undefined,
+      DATABASE_URL: undefined,
+    }, async () => {
       const reg = new BrainRegistry([]);
       // Expect the host-init path to be attempted (it'll fail on missing
       // <isolated>/.gbrain/config.json, but the error will come from
       // initHostBrain, not UnknownBrainError — proving routing hit host).
-      await expect(reg.getBrain(null)).rejects.not.toBeInstanceOf(UnknownBrainError);
-      await expect(reg.getBrain(undefined)).rejects.not.toBeInstanceOf(UnknownBrainError);
-      await expect(reg.getBrain('')).rejects.not.toBeInstanceOf(UnknownBrainError);
-    } finally {
-      if (savedHome !== undefined) process.env.GBRAIN_HOME = savedHome;
-      else delete process.env.GBRAIN_HOME;
-    }
+      try {
+        await expect(reg.getBrain(null)).rejects.not.toBeInstanceOf(UnknownBrainError);
+        await expect(reg.getBrain(undefined)).rejects.not.toBeInstanceOf(UnknownBrainError);
+        await expect(reg.getBrain('')).rejects.not.toBeInstanceOf(UnknownBrainError);
+      } finally {
+        await reg.disconnectAll();
+      }
+    });
   });
 });

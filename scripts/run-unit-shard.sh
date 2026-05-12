@@ -16,6 +16,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Safe when invoked directly from git hooks: tests create nested repos and
+# must not inherit the outer repository's GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE.
+while IFS= read -r git_env_name; do
+  unset "$git_env_name"
+done < <(git rev-parse --local-env-vars 2>/dev/null || true)
+
 # --max-concurrency=N is forwarded to `bun test`. v0.26.4: invoked by
 # run-unit-parallel.sh; safe to call without (defaults to bun's default cap).
 MAX_CONC=""

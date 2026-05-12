@@ -189,7 +189,7 @@ export function installHook(repoPath: string, force: boolean): InstallResult {
 
   // Set core.hooksPath unless the user has set it to something else already.
   try {
-    const current = execFileSync('git', ['-C', repoPath, 'config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim();
+    const current = execFileSync('git', ['-C', repoPath, 'config', '--local', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim();
     if (current && current !== '.githooks') return 'installed';
   } catch {
     // git config returns non-zero when the key is unset; that's the normal case.

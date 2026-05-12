@@ -25,6 +25,13 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Git hooks export repository-local GIT_* variables. This suite creates nested
+# throwaway git repositories; inheriting the outer hook env makes child `git`
+# commands operate on this worktree instead of their temp repos.
+while IFS= read -r git_env_name; do
+  unset "$git_env_name"
+done < <(git rev-parse --local-env-vars 2>/dev/null || true)
+
 # ──────────────────────────────────────────────────────────────────────────
 # CPU detection: Apple Silicon perf cores → Mac total physical → nproc → 4.
 # Returns a single positive integer.

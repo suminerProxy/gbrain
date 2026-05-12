@@ -5,7 +5,7 @@
  * The dispatch helper is pure so we test it directly. The "replay works
  * without DATABASE_URL" assertion is end-to-end in test/e2e/eval-takes-quality.test.ts.
  */
-import { describe, test, expect } from 'bun:test';
+import { afterAll, beforeAll, describe, test, expect } from 'bun:test';
 import { parseSubcmd, runReplayNoBrain } from '../src/commands/eval-takes-quality.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -100,6 +100,3 @@ describe('runReplayNoBrain — codex review #10 brain-routing', () => {
     expect(exit).toBe(1);
   });
 });
-
-// We import beforeAll / afterAll from bun:test; re-declare for the inner suite.
-import { beforeAll, afterAll } from 'bun:test';
