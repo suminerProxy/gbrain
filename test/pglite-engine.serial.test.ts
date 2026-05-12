@@ -170,7 +170,7 @@ describe('PGLiteEngine: Pages', () => {
 // Search (tsvector triggers + FTS)
 // ─────────────────────────────────────────────────────────────────
 describe('PGLiteEngine: Search', () => {
-  beforeAll(async () => {
+  async function seedSearchData() {
     await truncateAll();
     await engine.putPage('companies/novamind', {
       type: 'company', title: 'NovaMind',
@@ -186,20 +186,23 @@ describe('PGLiteEngine: Search', () => {
     await engine.upsertChunks('concepts/rag', [
       { chunk_index: 0, chunk_text: 'RAG combines retrieval with generation', chunk_source: 'compiled_truth' },
     ]);
-  });
+  }
 
   test('searchKeyword returns results for matching term', async () => {
+    await seedSearchData();
     const results = await engine.searchKeyword('NovaMind');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].slug).toBe('companies/novamind');
   });
 
   test('searchKeyword returns empty for non-matching term', async () => {
+    await seedSearchData();
     const results = await engine.searchKeyword('xyznonexistent');
     expect(results.length).toBe(0);
   });
 
   test('tsvector trigger populates search_vector on insert', async () => {
+    await seedSearchData();
     // Verify the PL/pgSQL trigger fires and content_chunks.search_vector is
     // populated from chunk_text. v0.20.0 Cathedral II Layer 3 moved FTS from
     // pages.search_vector to content_chunks.search_vector — the chunk-grain
@@ -211,6 +214,7 @@ describe('PGLiteEngine: Search', () => {
   });
 
   test('searchVector returns empty when no embeddings', async () => {
+    await seedSearchData();
     const fakeEmbedding = new Float32Array(1536);
     const results = await engine.searchVector(fakeEmbedding);
     expect(results.length).toBe(0);
@@ -683,16 +687,17 @@ describe('PGLiteEngine: IngestLog', () => {
 // Stats + Health
 // ─────────────────────────────────────────────────────────────────
 describe('PGLiteEngine: Stats & Health', () => {
-  beforeAll(async () => {
+  async function seedStatsData() {
     await truncateAll();
     await engine.putPage('test/stats', testPage);
     await engine.upsertChunks('test/stats', [
       { chunk_index: 0, chunk_text: 'chunk', chunk_source: 'compiled_truth' },
     ]);
     await engine.addTag('test/stats', 'stat-tag');
-  });
+  }
 
   test('getStats returns correct counts', async () => {
+    await seedStatsData();
     const stats = await engine.getStats();
     expect(stats.page_count).toBe(1);
     expect(stats.chunk_count).toBe(1);
@@ -701,6 +706,7 @@ describe('PGLiteEngine: Stats & Health', () => {
   });
 
   test('getHealth returns coverage metrics', async () => {
+    await seedStatsData();
     const health = await engine.getHealth();
     expect(health.page_count).toBe(1);
     expect(health.missing_embeddings).toBe(1); // chunk has no embedding

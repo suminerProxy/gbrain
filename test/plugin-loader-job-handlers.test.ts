@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import {
 } from '../src/core/minions/plugin-loader.ts';
 
 const tempDirs: string[] = [];
+let engine: PGLiteEngine;
 
 function tempPluginDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'gbrain-plugin-job-handlers-'));
@@ -23,6 +24,16 @@ afterEach(() => {
     const dir = tempDirs.pop()!;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+beforeAll(async () => {
+  engine = new PGLiteEngine();
+  await engine.connect({});
+  await engine.initSchema();
+});
+
+afterAll(async () => {
+  await engine.disconnect();
 });
 
 async function waitTerminal(queue: MinionQueue, id: number, timeoutMs = 10000): Promise<string> {
@@ -74,30 +85,23 @@ describe('GBRAIN_PLUGIN_PATH job handler loading', () => {
       }
     `);
 
-    const engine = new PGLiteEngine();
-    await engine.connect({});
-    await engine.initSchema();
-    try {
-      const worker = new MinionWorker(engine, { pollInterval: 50, lockDuration: 30000 });
-      const result = await registerPluginJobHandlersFromEnv(worker, engine, { envPath: root });
-      expect(result.warnings).toEqual([]);
-      expect(worker.registeredNames).toContain('aios-task-test');
+    const worker = new MinionWorker(engine, { pollInterval: 50, lockDuration: 30000 });
+    const result = await registerPluginJobHandlersFromEnv(worker, engine, { envPath: root });
+    expect(result.warnings).toEqual([]);
+    expect(worker.registeredNames).toContain('aios-task-test');
 
-      const queue = new MinionQueue(engine);
-      const job = await queue.add('aios-task-test', { task_id: 'task-smoke' }, { queue: 'default' });
-      const runPromise = worker.start();
-      try {
-        const status = await waitTerminal(queue, job.id);
-        expect(status).toBe('completed');
-        const final = await queue.getJob(job.id);
-        expect(final?.result).toEqual({ ok: true, task_id: 'task-smoke' });
-        expect(final?.progress).toEqual({ phase: 'smoke', task_id: 'task-smoke' });
-      } finally {
-        worker.stop();
-        await runPromise;
-      }
+    const queue = new MinionQueue(engine);
+    const job = await queue.add('aios-task-test', { task_id: 'task-smoke' }, { queue: 'default' });
+    const runPromise = worker.start();
+    try {
+      const status = await waitTerminal(queue, job.id);
+      expect(status).toBe('completed');
+      const final = await queue.getJob(job.id);
+      expect(final?.result).toEqual({ ok: true, task_id: 'task-smoke' });
+      expect(final?.progress).toEqual({ phase: 'smoke', task_id: 'task-smoke' });
     } finally {
-      await engine.disconnect();
+      worker.stop();
+      await runPromise;
     }
   }, 20000);
 });

@@ -18,6 +18,7 @@ import { describe, test, expect } from 'bun:test';
 import { mkdtempSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { withEnv } from './helpers/with-env.ts';
 
 // Save original env so we don't leak between tests.
 const ORIG_GBRAIN_HOME = process.env.GBRAIN_HOME;
@@ -75,20 +76,24 @@ describe('GBRAIN_HOME write-side isolation', () => {
 
   test('saveConfig/loadConfig honor GBRAIN_HOME', async () => {
     const tmp = fresh();
-    process.env.GBRAIN_HOME = tmp;
     try {
-      const { saveConfig, loadConfig } = await import('../src/core/config.ts');
-      const cfg = { engine: 'pglite' as const, database_path: join(tmp, '.gbrain', 'brain.pglite') };
-      saveConfig(cfg);
-      // Config file should exist under the override, NOT under real ~/.gbrain.
-      expect(existsSync(join(tmp, '.gbrain', 'config.json'))).toBe(true);
+      await withEnv({
+        GBRAIN_HOME: tmp,
+        GBRAIN_DATABASE_URL: undefined,
+        DATABASE_URL: undefined,
+      }, async () => {
+        const { saveConfig, loadConfig } = await import('../src/core/config.ts');
+        const cfg = { engine: 'pglite' as const, database_path: join(tmp, '.gbrain', 'brain.pglite') };
+        saveConfig(cfg);
+        // Config file should exist under the override, NOT under real ~/.gbrain.
+        expect(existsSync(join(tmp, '.gbrain', 'config.json'))).toBe(true);
 
-      // Round-trip: loadConfig() finds it back via the override.
-      const loaded = loadConfig();
-      expect(loaded?.engine).toBe('pglite');
-      expect(loaded?.database_path).toBe(cfg.database_path);
+        // Round-trip: loadConfig() finds it back via the override.
+        const loaded = loadConfig();
+        expect(loaded?.engine).toBe('pglite');
+        expect(loaded?.database_path).toBe(cfg.database_path);
+      });
     } finally {
-      process.env.GBRAIN_HOME = ORIG_GBRAIN_HOME;
       rmSync(tmp, { recursive: true, force: true });
     }
   });
